@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pneuvision"
+version = "0.1.0"
+description = "Task-Guided Enhancement, 2D Spatial Autoencoder Compression, and Squeeze-and-Excitation Networks for Ultra-Lightweight Pediatric Pneumonia Detection"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "numpy>=1.24.0",
+    "Pillow>=9.5.0",
+    "matplotlib>=3.7.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pneuvision*"]

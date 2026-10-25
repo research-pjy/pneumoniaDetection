@@ -1,0 +1,56 @@
+# Python byte-compiled / cache / build files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Datasets, archives, checkpoints, and large artifacts
+/dataset/
+/data/
+/datasets/
+*.tar.gz
+*.zip
+/checkpoints/
+/outputs/
+/runs/
+/logs/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+
+# Allow tracking publication figures and JSON summary reports if desired
+!outputs/figures/*.png
+!outputs/*.json
+
+# OS / IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
