@@ -51,9 +51,11 @@ dataset/
 *.safetensors
 *.ckpt
 
-# Allow tracking publication figures and JSON summary reports if desired
+# Allow tracking publication figures, JSON summary reports, and ultra-compact pretrained TG-SECAE weights (< 1.2 MB total)
 !outputs/figures/*.png
 !outputs/*.json
+!pretrained_models/
+!pretrained_models/*.pt
 
 # OS / IDE files
 .DS_Store
