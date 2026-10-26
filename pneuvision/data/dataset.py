@@ -13,6 +13,8 @@ Matches the actual extracted directory structure on Linux (`rama`):
     └── test/                   # 587 blind evaluation images (also supports test_unlabeled/)
 """
 
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import tarfile
@@ -282,6 +284,112 @@ class ChestXRayDataset(Dataset):
             item["target_image"] = torch.from_numpy(raw_01)[None, :, :]
 
         return item
+
+
+@dataclass
+class RAMCachedSplit:
+    """Holds pre-decoded 256x256 grayscale radiographs in RAM (~1.2 GB for 4,684 images)."""
+    images: np.ndarray        # float32 array of shape (N, H, W) in [0.0, 1.0]
+    labels: np.ndarray        # int64 array of shape (N,)
+    image_ids: List[str]
+
+
+def load_split_into_ram(
+    dataset_dir: str | Path = "./DATASET",
+    split: str = "train",
+    image_size: int = 256,
+    max_samples: int = 0,
+    num_threads: int = 8,
+) -> RAMCachedSplit:
+    """
+    Decode and resize all radiographs in `split` into a contiguous `(N, H, W)` float32
+    array in RAM once, eliminating repetitive JPEG decoding overhead across multi-run sweeps.
+    """
+    base_ds = ChestXRayDataset(dataset_dir=dataset_dir, split=split, image_size=image_size)
+    samples = base_ds.samples
+    if max_samples > 0 and len(samples) > max_samples:
+        # Balanced subsample for smoke test
+        norm_s = [s for s in samples if s[1] == 0][: max_samples // 2]
+        pneu_s = [s for s in samples if s[1] == 1][: max_samples - len(norm_s)]
+        samples = norm_s + pneu_s
+
+    def _decode_one(item: Tuple[Path, int]) -> Tuple[np.ndarray, int, str]:
+        p, lbl = item
+        with Image.open(p) as im:
+            im_gray = im.convert("L").resize(
+                (image_size, image_size), resample=Image.Resampling.BILINEAR
+            )
+            arr = np.asarray(im_gray, dtype=np.float32) / 255.0
+        return arr, lbl, p.name
+
+    with ThreadPoolExecutor(max_workers=num_threads) as ex:
+        results = list(ex.map(_decode_one, samples))
+
+    imgs = np.stack([r[0] for r in results], axis=0).astype(np.float32)
+    lbls = np.array([r[1] for r in results], dtype=np.int64)
+    ids = [r[2] for r in results]
+    return RAMCachedSplit(images=imgs, labels=lbls, image_ids=ids)
+
+
+class InMemoryChestXRayDataset(Dataset):
+    """
+    Ultra-fast in-memory PyTorch Dataset built from a `RAMCachedSplit`.
+    Precomputes the deterministic enhancement view (`raw`, `fixed_clahe` at `alpha`,
+    or `multiview_3ch`) once in parallel so L40S GPU training runs at full memory bandwidth.
+    """
+
+    def __init__(
+        self,
+        cached_split: RAMCachedSplit,
+        preprocess_mode: str = "raw",
+        alpha_strength: float = 0.0,
+        clahe_clip_limit: float = 2.0,
+        augment: bool = False,
+        num_threads: int = 8,
+    ) -> None:
+        super().__init__()
+        self.labels = torch.from_numpy(cached_split.labels).long()
+        self.image_ids = cached_split.image_ids
+        self.augment = augment
+
+        raw_imgs = cached_split.images  # (N, H, W)
+        n = raw_imgs.shape[0]
+
+        if preprocess_mode == "fixed_clahe" and alpha_strength > 0.0:
+            def _enh(i: int) -> np.ndarray:
+                return apply_progressive_enhancement_numpy(
+                    raw_imgs[i], alpha=alpha_strength, base_clip_limit=clahe_clip_limit
+                )[None, :, :]
+            with ThreadPoolExecutor(max_workers=num_threads) as ex:
+                proc_list = list(ex.map(_enh, range(n)))
+            self.tensors = torch.from_numpy(np.stack(proc_list, axis=0))
+        elif preprocess_mode == "multiview_3ch":
+            def _mv(i: int) -> np.ndarray:
+                return build_multiview_3ch_numpy(raw_imgs[i], clip_limit=clahe_clip_limit)
+            with ThreadPoolExecutor(max_workers=num_threads) as ex:
+                proc_list = list(ex.map(_mv, range(n)))
+            self.tensors = torch.from_numpy(np.stack(proc_list, axis=0))
+        else:
+            # 'raw', 'task_guided_global', 'task_guided_adaptive'
+            self.tensors = torch.from_numpy(raw_imgs[:, None, :, :]).contiguous()
+
+    def __len__(self) -> int:
+        return self.tensors.shape[0]
+
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        x = self.tensors[idx]
+        if self.augment:
+            if torch.rand(1).item() < 0.5:
+                x = torch.flip(x, dims=[-1])
+            if torch.rand(1).item() < 0.5:
+                scale = 0.93 + 0.14 * torch.rand(1).item()
+                shift = -0.04 + 0.08 * torch.rand(1).item()
+                x = torch.clamp(x * scale + shift, 0.0, 1.0)
+        return {
+            "image": x,
+            "label": self.labels[idx],
+            "image_id": self.image_ids[idx],
+        }
 
 
 def generate_synthetic_chest_xray(

@@ -24,7 +24,10 @@ A clean, modular, publication-oriented PyTorch research framework for **Pediatri
   - Clinical evaluation metrics: Accuracy, Balanced Accuracy, Sensitivity (Recall), Specificity, Precision, NPV, F1-Score, AUROC, AUPRC, and optimal threshold calibration ([`pneuvision/utils/metrics.py`](pneuvision/utils/metrics.py))
   - Deterministic Tile-Interpolated CLAHE, Multi-View 3-Channel Stack, and Differentiable `TaskGuidedEnhancer` ([`pneuvision/data/enhancement.py`](pneuvision/data/enhancement.py))
   - Dataset auditor & Stage 0 verification script ([`scripts/00_verify_env_and_data.py`](scripts/00_verify_env_and_data.py))
-- [ ] **Stage 1: Exp 1 — The "Inverted-U" Enhancement Study & Task-Guided Adaptive Enhancer**
+- [x] **Stage 1: Exp 1 — The "Inverted-U" Enhancement Study & Task-Guided Adaptive Enhancer**
+  - Ultra-lightweight depthwise-separable classifier probe [`TinyPneuNet`](pneuvision/models/classifier.py) (~7.3k parameters) & attention blocks ([`pneuvision/models/attention.py`](pneuvision/models/attention.py))
+  - Fast RAM-cached radiograph loader ([`load_split_into_ram`](pneuvision/data/dataset.py)) for multi-run ablation sweeps on `rama`
+  - Fixed Enhancement Strength Sweep ($\alpha \in \{0.0, 0.25, 0.50, 0.75, 1.0, 1.5, 2.0, 3.0\}$) vs. Multi-View 3-Channel vs. `TGAE-Global` (+2 params) and `TGAE-Adaptive` (+58 params) ([`scripts/01_exp1_enhancement_study.py`](scripts/01_exp1_enhancement_study.py))
 - [ ] **Stage 2: Exp 2 — 2D Spatial Autoencoder Compression & Coupling Regimes**
 - [ ] **Stage 3: Exp 3 — Channel Attention (`SE` / `ECA` / `CBAM`) & Parameter-Budget Pareto Frontier vs. Baselines**
 - [ ] **Stage 4: Grad-CAM Clinical Interpretability & Final `submission.csv` Generation**
