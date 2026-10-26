@@ -25,9 +25,10 @@ A clean, modular, publication-oriented PyTorch research framework for **Pediatri
   - Deterministic Tile-Interpolated CLAHE, Multi-View 3-Channel Stack, and Differentiable `TaskGuidedEnhancer` ([`pneuvision/data/enhancement.py`](pneuvision/data/enhancement.py))
   - Dataset auditor & Stage 0 verification script ([`scripts/00_verify_env_and_data.py`](scripts/00_verify_env_and_data.py))
 - [x] **Stage 1: Exp 1 — The "Inverted-U" Enhancement Study & Task-Guided Adaptive Enhancer**
-  - Ultra-lightweight depthwise-separable classifier probe [`TinyPneuNet`](pneuvision/models/classifier.py) (~7.3k parameters) & attention blocks ([`pneuvision/models/attention.py`](pneuvision/models/attention.py))
-  - Fast RAM-cached radiograph loader ([`load_split_into_ram`](pneuvision/data/dataset.py)) for multi-run ablation sweeps on `rama`
-  - Fixed Enhancement Strength Sweep ($\alpha \in \{0.0, 0.25, 0.50, 0.75, 1.0, 1.5, 2.0, 3.0\}$) vs. Multi-View 3-Channel vs. `TGAE-Global` (+2 params) and `TGAE-Adaptive` (+58 params) ([`scripts/01_exp1_enhancement_study.py`](scripts/01_exp1_enhancement_study.py))
-- [ ] **Stage 2: Exp 2 — 2D Spatial Autoencoder Compression & Coupling Regimes**
+  - Empirically confirmed the **Inverted-U Over-Enhancement Curve** (Fixed $\alpha = 0.25\text{--}0.50$ improves F1 from `97.20% -> 97.55%` and Balanced Accuracy from `94.40% -> 95.55%`, whereas full unblended CLAHE $\alpha = 1.00$ drops to `93.66%` Balanced Accuracy / `96.23%` F1).
+  - **`TGAE-Adaptive` (+58 params, 8,303 total params)** achieved the **highest Balanced Accuracy (`96.31%`), highest Specificity (`96.84%`, +5.70% over Raw), and highest AUROC (`98.60%`)** of all 11 conditions.
+- [x] **Stage 2: Exp 2 — 2D Spatial Autoencoder Compression & Coupling Regimes**
+  - 2D Spatial Convolutional Autoencoder (`SpatialEncoder2D` + `SpatialDecoder2D`), 1D Vector Bottleneck baseline (`VectorAutoencoder1D`), and Unified `UnifiedTGSECAE` architecture ([`pneuvision/models/autoencoder.py`](pneuvision/models/autoencoder.py))
+  - Stage 2 Bottleneck Geometry (`1D-Vec64` vs `2D-16x16` vs `2D-32x32` vs `2D-64x64`) & 5-Regime Coupling Study ([`scripts/02_exp2_autoencoder_study.py`](scripts/02_exp2_autoencoder_study.py))
 - [ ] **Stage 3: Exp 3 — Channel Attention (`SE` / `ECA` / `CBAM`) & Parameter-Budget Pareto Frontier vs. Baselines**
 - [ ] **Stage 4: Grad-CAM Clinical Interpretability & Final `submission.csv` Generation**

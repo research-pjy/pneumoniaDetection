@@ -245,3 +245,132 @@ def plot_tgae_visual_comparison(
     fig.savefig(out_file, bbox_inches="tight")
     plt.close(fig)
     return out_file
+
+
+def plot_stage2_ae_reconstructions(
+    sample_raw: np.ndarray,
+    rec_1d: np.ndarray,
+    metrics_1d: Tuple[float, float],
+    rec_16: np.ndarray,
+    metrics_16: Tuple[float, float],
+    rec_32: np.ndarray,
+    metrics_32: Tuple[float, float],
+    rec_64: np.ndarray,
+    metrics_64: Tuple[float, float],
+    latent_32_grid: np.ndarray,
+    out_path: str | Path,
+) -> Path:
+    """
+    Generate a 1x6 publication figure comparing Autoencoder Bottleneck Reconstructions:
+      Col 0: Original Radiograph (256x256)
+      Col 1: 1D Vector Bottleneck (z in R^64) -> blurry ribcage/parenchyma loss
+      Col 2: 2D Spatial 16x16 Bottleneck
+      Col 3: 2D Spatial 32x32 Bottleneck (Core 64x area compression)
+      Col 4: 2D Spatial 64x64 Bottleneck
+      Col 5: Mean 2D Latent Activation Map (32x32)
+    """
+    out_file = Path(out_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, axes = plt.subplots(1, 6, figsize=(15.5, 3.3), dpi=180)
+
+    panels = [
+        ("Original (256×256)", sample_raw, "Reference", "gray"),
+        ("1D Vector (R^64)", rec_1d, f"PSNR: {metrics_1d[0]:.1f} dB | SSIM: {metrics_1d[1]:.3f}", "gray"),
+        ("2D Grid (16×16×16)", rec_16, f"PSNR: {metrics_16[0]:.1f} dB | SSIM: {metrics_16[1]:.3f}", "gray"),
+        ("2D Grid (16×32×32)", rec_32, f"PSNR: {metrics_32[0]:.1f} dB | SSIM: {metrics_32[1]:.3f}", "gray"),
+        ("2D Grid (16×64×64)", rec_64, f"PSNR: {metrics_64[0]:.1f} dB | SSIM: {metrics_64[1]:.3f}", "gray"),
+        ("32×32 Latent Map", latent_32_grid, "Mean 2D Bottleneck Energy", "viridis"),
+    ]
+
+    for idx, (title, img, sub, cmap) in enumerate(panels):
+        ax = axes[idx]
+        if cmap == "gray":
+            ax.imshow(img, cmap=cmap, vmin=0.0, vmax=1.0)
+        else:
+            ax.imshow(img, cmap=cmap)
+        ax.set_title(title, fontsize=9.5, fontweight="bold")
+        ax.set_xlabel(sub, fontsize=8.5)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    fig.suptitle(
+        "Stage 2 (Exp 2A): 1D Vector Bottleneck vs. 2D Spatial Autoencoder Reconstruction Quality & Latent Map",
+        fontsize=11.5,
+        fontweight="bold",
+        y=1.02,
+    )
+    fig.tight_layout()
+    fig.savefig(out_file, bbox_inches="tight")
+    plt.close(fig)
+    return out_file
+
+
+def plot_stage2_coupling_comparison(
+    bottleneck_records: List[Dict[str, Any]],
+    coupling_records: List[Dict[str, Any]],
+    out_path: str | Path,
+) -> Path:
+    """
+    Generate a 2-panel publication plot:
+      Panel (a): Reconstruction PSNR & Classification F1 across Bottleneck Geometries (1D vs 2D).
+      Panel (b): Validation F1, Balanced Accuracy, and AUROC across the 5 AE-Classifier Coupling Regimes.
+    """
+    out_file = Path(out_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.6, 5.0), dpi=180)
+
+    # Panel A: Bottleneck Geometry comparison
+    b_names = [r["short_label"] for r in bottleneck_records]
+    b_f1s = [float(r["calibrated_metrics"]["f1_score"]) for r in bottleneck_records]
+    b_bal = [float(r["calibrated_metrics"]["balanced_accuracy"]) for r in bottleneck_records]
+    b_psnr = [float(r["ae_psnr_db"]) for r in bottleneck_records]
+
+    x_pos = np.arange(len(b_names))
+    w = 0.34
+    ax1.bar(x_pos - w / 2, b_f1s, width=w, label="Val F1-Score (%)", color="#1f77b4")
+    ax1.bar(x_pos + w / 2, b_bal, width=w, label="Balanced Acc (%)", color="#2ca02c")
+    ax1.set_xticks(x_pos)
+    ax1.set_xticklabels(b_names, fontsize=9, fontweight="bold")
+    ax1.set_ylim(max(min(b_bal) - 4.0, 70.0), 100.0)
+    ax1.set_ylabel("Classification Metric (%)", fontsize=10, fontweight="bold")
+    ax1.set_title("(a) 1D Vector vs. 2D Spatial Bottleneck Geometry", fontsize=10.5, fontweight="bold")
+    ax1.grid(True, axis="y", linestyle="--", alpha=0.35)
+
+    ax1_twin = ax1.twinx()
+    ax1_twin.plot(x_pos, b_psnr, color="#d62728", marker="o", linewidth=2.2, label="Recon PSNR (dB)")
+    ax1_twin.set_ylabel("Reconstruction PSNR (dB)", fontsize=10, fontweight="bold", color="#d62728")
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax1_twin.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="lower right", fontsize=8.5)
+
+    # Panel B: Coupling Regimes comparison
+    c_names = [r["short_label"] for r in coupling_records]
+    c_f1s = [float(r["calibrated_metrics"]["f1_score"]) for r in coupling_records]
+    c_bal = [float(r["calibrated_metrics"]["balanced_accuracy"]) for r in coupling_records]
+    c_auc = [float(r["calibrated_metrics"]["auroc"]) for r in coupling_records]
+
+    xc = np.arange(len(c_names))
+    wc = 0.26
+    ax2.bar(xc - wc, c_f1s, width=wc, label="Val F1 (%)", color="#1f77b4")
+    ax2.bar(xc, c_bal, width=wc, label="Balanced Acc (%)", color="#ff7f0e")
+    ax2.bar(xc + wc, c_auc, width=wc, label="AUROC (%)", color="#9467bd")
+    ax2.set_xticks(xc)
+    ax2.set_xticklabels(c_names, fontsize=8.5, fontweight="bold", rotation=12)
+    ax2.set_ylim(max(min(c_bal) - 4.0, 75.0), 100.0)
+    ax2.set_ylabel("Validation Metric (%)", fontsize=10, fontweight="bold")
+    ax2.set_title("(b) Autoencoder–Classifier Coupling Regimes (32×32 Latent Grid)", fontsize=10.5, fontweight="bold")
+    ax2.grid(True, axis="y", linestyle="--", alpha=0.35)
+    ax2.legend(loc="lower right", fontsize=8.5)
+
+    fig.suptitle(
+        "Stage 2 (Exp 2): 2D Spatial Autoencoder Compression & Coupling Strategy Ablation",
+        fontsize=12,
+        fontweight="bold",
+        y=1.01,
+    )
+    fig.tight_layout()
+    fig.savefig(out_file, bbox_inches="tight")
+    plt.close(fig)
+    return out_file
