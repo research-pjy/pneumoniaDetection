@@ -374,3 +374,119 @@ def plot_stage2_coupling_comparison(
     fig.savefig(out_file, bbox_inches="tight")
     plt.close(fig)
     return out_file
+
+
+def plot_stage3_attention_ablation(
+    attention_records: List[Dict[str, Any]],
+    out_path: str | Path,
+) -> Path:
+    """
+    Generate a publication figure comparing Channel/Spatial Attention mechanisms
+    (`none`, `eca`, `se_r8`, `se_r4`, `se_r2`, `cbam`) on top of the 32×32 Latent Grid.
+    """
+    out_file = Path(out_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    labels = [r["short_label"] for r in attention_records]
+    f1s = [float(r["calibrated_metrics"]["f1_score"]) for r in attention_records]
+    bals = [float(r["calibrated_metrics"]["balanced_accuracy"]) for r in attention_records]
+    specs = [float(r["calibrated_metrics"]["specificity"]) for r in attention_records]
+    aucs = [float(r["calibrated_metrics"]["auroc"]) for r in attention_records]
+
+    x = np.arange(len(labels))
+    w = 0.20
+
+    fig, ax = plt.subplots(figsize=(10.5, 4.8), dpi=180)
+    ax.bar(x - 1.5 * w, f1s, width=w, label="Val F1 (%)", color="#1f77b4")
+    ax.bar(x - 0.5 * w, bals, width=w, label="Balanced Acc (%)", color="#2ca02c")
+    ax.bar(x + 0.5 * w, specs, width=w, label="Specificity / TNR (%)", color="#ff7f0e")
+    ax.bar(x + 1.5 * w, aucs, width=w, label="AUROC (%)", color="#9467bd")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=9.5, fontweight="bold")
+    ax.set_ylim(max(min(specs) - 3.5, 85.0), 100.0)
+    ax.set_ylabel("Validation Metric (%)", fontsize=10.5, fontweight="bold")
+    ax.set_title(
+        "Stage 3 (Exp 3A): Channel & Spatial Attention Ablation on 16×32×32 Latent Representation",
+        fontsize=11.5,
+        fontweight="bold",
+    )
+    ax.grid(True, axis="y", linestyle="--", alpha=0.35)
+    ax.legend(loc="lower right", fontsize=9, ncol=2)
+    fig.tight_layout()
+    fig.savefig(out_file, bbox_inches="tight")
+    plt.close(fig)
+    return out_file
+
+
+def plot_stage3_pareto_frontier(
+    our_records: List[Dict[str, Any]],
+    baseline_records: List[Dict[str, Any]],
+    out_path: str | Path,
+) -> Path:
+    """
+    Generate the centerpiece 2-panel Pareto Frontier publication figure:
+      Panel (a): Balanced Accuracy (%) vs. Inference Parameters (Log Scale)
+      Panel (b): Validation F1-Score (%) vs. Inference MACs (Log Scale)
+    """
+    out_file = Path(out_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.8, 5.2), dpi=180)
+
+    # Sort our records by parameter count for clean Pareto curve connection
+    ours_sorted = sorted(our_records, key=lambda r: int(r["inference_params"]))
+    o_params = [int(r["inference_params"]) / 1e3 for r in ours_sorted]  # in Thousands (K)
+    o_macs = [float(r["macs_m"]) for r in ours_sorted]
+    o_bal = [float(r["calibrated_metrics"]["balanced_accuracy"]) for r in ours_sorted]
+    o_f1 = [float(r["calibrated_metrics"]["f1_score"]) for r in ours_sorted]
+    o_names = [r["short_label"] for r in ours_sorted]
+
+    b_params = [int(r["inference_params"]) / 1e3 for r in baseline_records]
+    b_macs = [float(r["macs_m"]) for r in baseline_records]
+    b_bal = [float(r["calibrated_metrics"]["balanced_accuracy"]) for r in baseline_records]
+    b_f1 = [float(r["calibrated_metrics"]["f1_score"]) for r in baseline_records]
+    b_names = [r["short_label"] for r in baseline_records]
+
+    # Panel A: Balanced Accuracy vs Log Parameters (K)
+    ax1.plot(o_params, o_bal, marker="o", markersize=9, linewidth=2.4, color="#d62728", label="TG-SECAE Family (Ours)")
+    ax1.scatter(b_params, b_bal, marker="s", s=85, color="#1f77b4", zorder=5, label="Standard Vision Backbones")
+
+    for x_p, y_v, txt in zip(o_params, o_bal, o_names):
+        ax1.annotate(txt, (x_p, y_v), textcoords="offset points", xytext=(0, 8), ha="center", fontsize=8.5, fontweight="bold", color="#b01a1a")
+    for x_p, y_v, txt in zip(b_params, b_bal, b_names):
+        ax1.annotate(txt, (x_p, y_v), textcoords="offset points", xytext=(0, -13), ha="center", fontsize=8.5, color="#1f4f82")
+
+    ax1.set_xscale("log")
+    ax1.set_xlabel("Trainable Inference Parameters (Thousands, Log Scale)", fontsize=10.5, fontweight="bold")
+    ax1.set_ylabel("Validation Balanced Accuracy (%)", fontsize=10.5, fontweight="bold")
+    ax1.set_title("(a) Diagnostic Balanced Accuracy vs. Parameter Count", fontsize=11, fontweight="bold")
+    ax1.grid(True, which="both", linestyle="--", alpha=0.35)
+    ax1.legend(loc="lower right", fontsize=9)
+
+    # Panel B: Validation F1-Score vs Log MACs (M)
+    ax2.plot(o_macs, o_f1, marker="o", markersize=9, linewidth=2.4, color="#d62728", label="TG-SECAE Family (Ours)")
+    ax2.scatter(b_macs, b_f1, marker="s", s=85, color="#1f77b4", zorder=5, label="Standard Vision Backbones")
+
+    for x_m, y_v, txt in zip(o_macs, o_f1, o_names):
+        ax2.annotate(txt, (x_m, y_v), textcoords="offset points", xytext=(0, 8), ha="center", fontsize=8.5, fontweight="bold", color="#b01a1a")
+    for x_m, y_v, txt in zip(b_macs, b_f1, b_names):
+        ax2.annotate(txt, (x_m, y_v), textcoords="offset points", xytext=(0, -13), ha="center", fontsize=8.5, color="#1f4f82")
+
+    ax2.set_xscale("log")
+    ax2.set_xlabel("Inference Multiply-Accumulates per Image (MACs in Millions, Log Scale)", fontsize=10.5, fontweight="bold")
+    ax2.set_ylabel("Validation F1-Score (%)", fontsize=10.5, fontweight="bold")
+    ax2.set_title("(b) Validation F1-Score vs. Computational Cost (MACs)", fontsize=11, fontweight="bold")
+    ax2.grid(True, which="both", linestyle="--", alpha=0.35)
+    ax2.legend(loc="lower right", fontsize=9)
+
+    fig.suptitle(
+        "Stage 3 (Exp 3B): Accuracy–Efficiency Pareto Frontier Across Parameter & Compute Budgets",
+        fontsize=12.5,
+        fontweight="bold",
+        y=1.02,
+    )
+    fig.tight_layout()
+    fig.savefig(out_file, bbox_inches="tight")
+    plt.close(fig)
+    return out_file

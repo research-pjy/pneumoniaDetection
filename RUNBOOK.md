@@ -106,3 +106,40 @@ python scripts/02_exp2_autoencoder_study.py \
 - `outputs/stage2_autoencoder_results.json`: Complete metrics and PSNR/SSIM evaluations.
 - `outputs/figures/stage2_ae_reconstructions.png`: Visual comparison of Original vs. 1D Vector vs. 2D 16×16 / 32×32 / 64×64 reconstructions + 32×32 Latent Energy Map.
 - `outputs/figures/stage2_coupling_comparison.png`: Bar/line plots comparing bottleneck geometries and the 5 coupling regimes.
+
+---
+
+## Stage 3 (Exp 3): Channel Attention (`SE`/`ECA`/`CBAM`) & Parameter-Budget Pareto Frontier
+
+### Step 3.1: Run Mandatory 2-Epoch Stage 3 Smoke Test on `rama`
+
+```bash
+git pull
+python scripts/03_exp3_attention_pareto.py \
+    --dataset-dir ./DATASET \
+    --output-dir ./outputs \
+    --smoke-test
+```
+
+### Step 3.2: Run Full Stage 3 Publication Study (Exp 3A + Exp 3B)
+
+Runs:
+- **Exp 3A (`Table 3A` — Channel & Spatial Attention Ablation on `TG-SECAE-Micro` `16×32×32`):**
+  Compares `att_none`, `att_eca_k3` (+18 params), `att_se_r8`, `att_se_r4`, `att_se_r2`, and `att_cbam`.
+- **Exp 3B (`Table 3B` — Accuracy–Efficiency Pareto Frontier):**
+  Scales our winning `TG-SECAE` architecture across 4 strict parameter tiers (`Nano` ~3.5k, `Micro` ~9.5k, `Tiny` ~33k, `Small` ~118k) against standard vision backbones trained under identical conditions (`ShuffleNetV2-0.5x`, `SqueezeNet-1.1`, `MobileNetV2`, and `ResNet-18`).
+
+```bash
+python scripts/03_exp3_attention_pareto.py \
+    --dataset-dir ./DATASET \
+    --output-dir ./outputs \
+    --ae-epochs 12 \
+    --cls-epochs 25 \
+    --batch-size 64
+```
+
+**Generated Publication Outputs (`./outputs`):**
+- `outputs/stage3_summary_table.md`: Publication Markdown tables (`Table 3A` & `Table 3B`).
+- `outputs/stage3_attention_pareto_results.json`: Full metrics and efficiency profiles across all 13 runs.
+- `outputs/figures/stage3_attention_ablation.png`: Bar comparison across attention mechanisms.
+- `outputs/figures/stage3_pareto_frontier.png`: Log-scale Pareto Frontier of Balanced Accuracy vs. Parameters and F1-Score vs. MACs.
