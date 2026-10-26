@@ -143,3 +143,25 @@ python scripts/03_exp3_attention_pareto.py \
 - `outputs/stage3_attention_pareto_results.json`: Full metrics and efficiency profiles across all 13 runs.
 - `outputs/figures/stage3_attention_ablation.png`: Bar comparison across attention mechanisms.
 - `outputs/figures/stage3_pareto_frontier.png`: Log-scale Pareto Frontier of Balanced Accuracy vs. Parameters and F1-Score vs. MACs.
+
+---
+
+## Stage 4: Grad-CAM Clinical Interpretability & Final `submission.csv` Generation
+
+### Step 4.1: Generate Grad-CAM Panels, ROC/Confusion Plots & Verified `submission.csv` on `rama`
+
+Loads the trained Stage 3 `TG-SECAE` checkpoints (`Nano` 5.0k, `Micro-SE` 10.3k, `Micro-CBAM` 11.8k, `Tiny` 37.3k, `Small` 124.7k), evaluates each with Horizontal-Flip Test-Time Augmentation (TTA) as well as their **Multi-Scale `TG-SECAE` Ensemble (189.1k combined parameters — still 59× smaller than ResNet-18!)**, generates the 5-column Grad-CAM clinical interpretability figure and ROC/Confusion Matrix plot, and writes + verifies `./submission.csv` (588 lines):
+
+```bash
+git pull
+python scripts/04_interpret_and_submit.py \
+    --dataset-dir ./DATASET \
+    --output-dir ./outputs \
+    --submission-path ./submission.csv
+```
+
+**Generated Final Outputs:**
+- `./submission.csv` & `./outputs/submission.csv`: Verified 588-line benchmark submission file (`Image_ID,Label` with strictly integer `0` or `1` predictions).
+- `outputs/figures/stage4_gradcam_interpretability.png`: 5-column clinical diagnostic visualization (`Raw -> TGAE Enhanced -> 32×32 Latent Map -> AE Reconstruction -> Grad-CAM Saliency Overlay`).
+- `outputs/figures/stage4_roc_and_confusion.png`: ROC curve comparison (`TG-SECAE` tiers & ensemble vs. `ResNet-18`) + Validation Confusion Matrix.
+- `outputs/stage4_final_report.json`: Complete TTA, Ensemble, and submission verification metrics.

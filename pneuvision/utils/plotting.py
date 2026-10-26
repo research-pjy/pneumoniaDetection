@@ -490,3 +490,154 @@ def plot_stage3_pareto_frontier(
     fig.savefig(out_file, bbox_inches="tight")
     plt.close(fig)
     return out_file
+
+
+def plot_stage4_gradcam_panel(
+    samples: List[Dict[str, Any]],
+    out_path: str | Path,
+) -> Path:
+    """
+    Generate a multi-row 5-column clinical interpretability figure for representative
+    validation radiographs:
+      Col 0: Raw Radiograph (256x256)
+      Col 1: TGAE-Adaptive Enhanced Radiograph (with learned w_c, w_d)
+      Col 2: 32x32 2D Spatial Bottleneck Feature Energy
+      Col 3: 2D Spatial Autoencoder Reconstructed Radiograph
+      Col 4: Grad-CAM Diagnostic Saliency Overlay (with predicted probability)
+    """
+    out_file = Path(out_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    n_rows = len(samples)
+    fig, axes = plt.subplots(n_rows, 5, figsize=(14.0, 2.9 * n_rows), dpi=180)
+    if n_rows == 1:
+        axes = np.expand_dims(axes, axis=0)
+
+    col_titles = [
+        "1. Raw Radiograph",
+        "2. TGAE Enhanced",
+        "3. 32×32 Latent Grid",
+        "4. AE Reconstruction",
+        "5. Grad-CAM Saliency",
+    ]
+
+    for r_idx, item in enumerate(samples):
+        raw_img = item["raw"]
+        enh_img = item["enhanced"]
+        lat_map = item["latent_map"]
+        rec_img = item["reconstructed"]
+        cam_map = item["gradcam"]
+        wc, wd = item["wc"], item["wd"]
+        prob = item["prob"]
+        row_title = item["row_label"]
+
+        axes[r_idx, 0].imshow(raw_img, cmap="gray", vmin=0.0, vmax=1.0)
+        axes[r_idx, 0].set_ylabel(row_title, fontsize=9.5, fontweight="bold")
+
+        axes[r_idx, 1].imshow(enh_img, cmap="gray", vmin=0.0, vmax=1.0)
+        axes[r_idx, 1].set_xlabel(f"w_c={wc:.2f}, w_d={wd:.2f}", fontsize=8.5)
+
+        axes[r_idx, 2].imshow(lat_map, cmap="viridis")
+        axes[r_idx, 2].set_xlabel("16×32×32 Bottleneck", fontsize=8.5)
+
+        axes[r_idx, 3].imshow(rec_img, cmap="gray", vmin=0.0, vmax=1.0)
+        axes[r_idx, 3].set_xlabel("Zero-Cost Regularizer", fontsize=8.5)
+
+        axes[r_idx, 4].imshow(raw_img, cmap="gray", vmin=0.0, vmax=1.0)
+        axes[r_idx, 4].imshow(cam_map, cmap="jet", alpha=0.42, vmin=0.0, vmax=1.0)
+        axes[r_idx, 4].set_xlabel(f"P(Pneumonia) = {prob:.3f}", fontsize=8.5, fontweight="bold")
+
+        for c_idx in range(5):
+            if r_idx == 0:
+                axes[r_idx, c_idx].set_title(col_titles[c_idx], fontsize=10, fontweight="bold")
+            axes[r_idx, c_idx].set_xticks([])
+            axes[r_idx, c_idx].set_yticks([])
+
+    fig.suptitle(
+        "Stage 4: End-to-End Clinical Interpretability of TG-SECAE (Enhancement → 32×32 Latent → Grad-CAM)",
+        fontsize=12,
+        fontweight="bold",
+        y=1.01,
+    )
+    fig.tight_layout()
+    fig.savefig(out_file, bbox_inches="tight")
+    plt.close(fig)
+    return out_file
+
+
+def plot_stage4_roc_and_confusion(
+    roc_curves: List[Dict[str, Any]],
+    cm_dict: Dict[str, int],
+    model_title: str,
+    out_path: str | Path,
+) -> Path:
+    """
+    Generate a 2-panel clinical evaluation figure:
+      Panel (a): ROC Curves comparing TG-SECAE tiers & ensemble against ResNet-18.
+      Panel (b): Validation Confusion Matrix (TN, FP, FN, TP) with Sensitivity & Specificity.
+    """
+    out_file = Path(out_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12.2, 5.0), dpi=180)
+
+    # Panel A: ROC Curves
+    for item in roc_curves:
+        ax1.plot(
+            item["fpr"],
+            item["tpr"],
+            linewidth=item.get("lw", 2.0),
+            linestyle=item.get("ls", "-"),
+            label=f"{item['label']} (AUROC = {item['auroc']:.2f}%)",
+        )
+    ax1.plot([0, 1], [0, 1], color="gray", linestyle="--", linewidth=1.0)
+    ax1.set_xlim([0.0, 1.0])
+    ax1.set_ylim([0.0, 1.02])
+    ax1.set_xlabel("False Positive Rate (1 − Specificity)", fontsize=10.5, fontweight="bold")
+    ax1.set_ylabel("True Positive Rate (Sensitivity)", fontsize=10.5, fontweight="bold")
+    ax1.set_title("(a) Receiver Operating Characteristic (ROC) Comparison", fontsize=11, fontweight="bold")
+    ax1.grid(True, linestyle="--", alpha=0.35)
+    ax1.legend(loc="lower right", fontsize=8.5)
+
+    # Panel B: Confusion Matrix
+    tn, fp, fn, tp = cm_dict["tn"], cm_dict["fp"], cm_dict["fn"], cm_dict["tp"]
+    mat = np.array([[tn, fp], [fn, tp]], dtype=np.int64)
+    im = ax2.imshow(mat, cmap="Blues")
+    plt.colorbar(im, ax=ax2, fraction=0.046, pad=0.04)
+
+    classes = ["NORMAL (0)", "PNEUMONIA (1)"]
+    ax2.set_xticks([0, 1])
+    ax2.set_yticks([0, 1])
+    ax2.set_xticklabels(classes, fontsize=9.5, fontweight="bold")
+    ax2.set_yticklabels(classes, fontsize=9.5, fontweight="bold")
+    ax2.set_xlabel("Predicted Diagnosis", fontsize=10.5, fontweight="bold")
+    ax2.set_ylabel("Ground-Truth Diagnosis", fontsize=10.5, fontweight="bold")
+    ax2.set_title(f"(b) Validation Confusion Matrix — {model_title}", fontsize=11, fontweight="bold")
+
+    thresh_color = mat.max() / 2.0
+    cell_tags = [["True Negative (TN)", "False Positive (FP)"], ["False Negative (FN)", "True Positive (TP)"]]
+    for i in range(2):
+        for j in range(2):
+            val = mat[i, j]
+            pct = 100.0 * val / max(mat[i].sum(), 1)
+            ax2.text(
+                j,
+                i,
+                f"{cell_tags[i][j]}\n{val} ({pct:.1f}%)",
+                ha="center",
+                va="center",
+                fontsize=10,
+                fontweight="bold",
+                color="white" if val > thresh_color else "black",
+            )
+
+    fig.suptitle(
+        "Stage 4: Clinical Diagnostic ROC Performance & Validation Confusion Matrix",
+        fontsize=12,
+        fontweight="bold",
+        y=1.02,
+    )
+    fig.tight_layout()
+    fig.savefig(out_file, bbox_inches="tight")
+    plt.close(fig)
+    return out_file
