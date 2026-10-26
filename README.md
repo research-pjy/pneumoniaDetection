@@ -35,5 +35,7 @@ A clean, modular, publication-oriented PyTorch research framework for **Pediatri
   - **`TG-SECAE-Micro` (`11,848` params)** achieves **`96.92%` Val Accuracy, `97.91%` F1, and `98.59%` Sensitivity** (**942.8× smaller** than ResNet-18).
   - **`TG-SECAE-Small` (`124,705` params)** reaches **`96.70%` Balanced Accuracy, `96.20%` Specificity, and `97.88%` F1** (**89.6× smaller** than ResNet-18).
 - [x] **Stage 4: Grad-CAM Clinical Interpretability & Final `submission.csv` Generation**
-  - End-to-end 5-column Grad-CAM & Latent Bottleneck diagnostic panel, ROC + Confusion Matrix plots, Multi-Scale `TG-SECAE` evaluation with Horizontal-Flip TTA, and automated 6-point verified `submission.csv` exporter ([`scripts/04_interpret_and_submit.py`](scripts/04_interpret_and_submit.py))
+  - With Horizontal-Flip TTA, **`TG-SECAE-Nano` (`4,993` params)** reaches **`96.75%` Val Accuracy, `95.78%` Balanced Accuracy, `97.78%` F1, and `97.89%` Sensitivity** — surpassing `ResNet-18` (`96.58%` Acc, `95.66%` BalAcc, `97.66%` F1) while being **2,237.3× smaller**.
+  - The 5-model **Multi-Scale `TG-SECAE` Ensemble (`189,138` total params — 59.1× smaller than `ResNet-18`)** achieves **`99.04%` AUROC, `99.06%` Sensitivity, `97.80%` F1, and `96.75%` Accuracy**.
+  - Generated 5-column Grad-CAM & Latent Bottleneck diagnostic panel (`outputs/figures/stage4_gradcam_interpretability.png`), ROC + Confusion Matrix plots (`outputs/figures/stage4_roc_and_confusion.png`), and verified `submission.csv` (`588` lines, `all_checks_passed: True`) ([`scripts/04_interpret_and_submit.py`](scripts/04_interpret_and_submit.py))
   - Complete publication manuscript report ([`RESEARCH_REPORT.md`](RESEARCH_REPORT.md))
