@@ -27,12 +27,20 @@ env/
 venv/
 ENV/
 
-# Datasets, archives, checkpoints, and large artifacts
+# Datasets, archives, checkpoints, and large artifacts (both uppercase and lowercase for Linux)
+/DATASET/
 /dataset/
+/DATA/
 /data/
+/DATASETS/
 /datasets/
+DATASET/
+dataset/
 *.tar.gz
+*.tar
 *.zip
+*.jpeg
+*.jpg
 /checkpoints/
 /outputs/
 /runs/

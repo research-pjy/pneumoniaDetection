@@ -2,16 +2,15 @@
 Dataset loading, archive extraction, and synthetic smoke-test generation for
 Pediatric Chest X-Ray Pneumonia Detection.
 
-Matches the exact directory specification:
-    dataset/
+Matches the actual extracted directory structure on Linux (`rama`):
+    DATASET/
     ├── train/
     │   ├── NORMAL/             # Class 0 (4,684 total train images across NORMAL + PNEUMONIA)
     │   └── PNEUMONIA/          # Class 1
     ├── val/
     │   ├── NORMAL/             # Class 0 (585 total val images)
     │   └── PNEUMONIA/          # Class 1
-    ├── test_unlabeled/         # 587 blind evaluation images (img_XXXX.jpeg)
-    └── sample_submission.csv
+    └── test/                   # 587 blind evaluation images (also supports test_unlabeled/)
 """
 
 from pathlib import Path
@@ -31,17 +30,58 @@ from pneuvision.data.enhancement import (
 
 CLASS_TO_IDX = {"NORMAL": 0, "PNEUMONIA": 1}
 IDX_TO_CLASS = {0: "NORMAL", 1: "PNEUMONIA"}
+IMAGE_EXTENSIONS = {".jpeg", ".jpg", ".png"}
+
+
+def _list_images_in_dir(directory: Path, recursive: bool = False) -> List[Path]:
+    """Case-insensitive image file listing for Linux (`rama`) and Windows."""
+    if not directory.exists():
+        return []
+    iterator = directory.rglob("*") if recursive else directory.iterdir()
+    files = [
+        p for p in iterator
+        if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+    ]
+    return sorted(files, key=lambda p: p.name)
+
+
+def _resolve_existing_dataset_root(candidate: Path) -> Path:
+    """
+    Resolve case-sensitive dataset root on Linux (`./DATASET` vs `./dataset`).
+    """
+    if (candidate / "train").exists() and (candidate / "val").exists():
+        return candidate
+
+    parent = candidate.parent
+    for alt_name in ("DATASET", "dataset", candidate.name.upper(), candidate.name.lower()):
+        alt = parent / alt_name
+        if (alt / "train").exists() and (alt / "val").exists():
+            return alt
+
+    return candidate
+
+
+def _resolve_test_dir(ds_path: Path) -> Tuple[str, Path]:
+    """
+    Detect whether the unlabeled test split folder is named `test/` or `test_unlabeled/`.
+    """
+    for name in ("test", "test_unlabeled", "TEST"):
+        candidate = ds_path / name
+        if candidate.exists() and candidate.is_dir():
+            return name, candidate
+    return "test", ds_path / "test"
 
 
 def ensure_dataset_extracted(
-    dataset_dir: str | Path,
+    dataset_dir: str | Path = "./DATASET",
     tar_path: Optional[str | Path] = None,
 ) -> Path:
     """
-    Check if `dataset_dir` contains `train/`, `val/`, and `test_unlabeled/`.
-    If not, and `tar_path` is provided and exists, automatically extract `tar_path`.
+    Check if `dataset_dir` (or `./DATASET` / `./dataset`) contains `train/` and `val/`.
+    If not, and `tar_path` is provided and exists, automatically extract `tar_path`
+    and return the resolved dataset root path (`DATASET/`).
     """
-    ds_path = Path(dataset_dir).expanduser().resolve()
+    ds_path = _resolve_existing_dataset_root(Path(dataset_dir).expanduser().resolve())
     if (ds_path / "train").exists() and (ds_path / "val").exists():
         return ds_path
 
@@ -52,27 +92,26 @@ def ensure_dataset_extracted(
             ds_path.parent.mkdir(parents=True, exist_ok=True)
             with tarfile.open(archive, "r:*") as tf:
                 tf.extractall(path=ds_path.parent)
-            if (ds_path / "train").exists():
-                return ds_path
+            ds_path = _resolve_existing_dataset_root(ds_path)
 
     return ds_path
 
 
 def audit_dataset_directory(dataset_dir: str | Path, sample_limit: int = 300) -> Dict[str, Any]:
     """
-    Audit the dataset structure, exact image counts per split/class, class imbalance
-    ratios, recommended positive class weight for BCEWithLogitsLoss, and image resolution
-    statistics.
+    Audit the dataset structure (`DATASET/train`, `DATASET/val`, `DATASET/test`),
+    exact image counts per split/class, class imbalance ratios, recommended positive
+    class weight for BCEWithLogitsLoss, and image resolution statistics.
     """
-    ds_path = Path(dataset_dir).expanduser().resolve()
+    ds_path = _resolve_existing_dataset_root(Path(dataset_dir).expanduser().resolve())
     if not (ds_path / "train").exists():
         return {"exists": False, "dataset_dir": str(ds_path)}
 
     splits_info: Dict[str, Any] = {}
     for split in ("train", "val"):
         split_dir = ds_path / split
-        normal_files = sorted(list((split_dir / "NORMAL").glob("*.jp*g")))
-        pneu_files = sorted(list((split_dir / "PNEUMONIA").glob("*.jp*g")))
+        normal_files = _list_images_in_dir(split_dir / "NORMAL")
+        pneu_files = _list_images_in_dir(split_dir / "PNEUMONIA")
         n_norm = len(normal_files)
         n_pneu = len(pneu_files)
         total = n_norm + n_pneu
@@ -84,14 +123,17 @@ def audit_dataset_directory(dataset_dir: str | Path, sample_limit: int = 300) ->
             "pos_weight_for_bce": round(n_norm / max(n_pneu, 1), 4),
         }
 
-    test_dir = ds_path / "test_unlabeled"
-    test_files = sorted(list(test_dir.glob("*.jp*g"))) if test_dir.exists() else []
-    splits_info["test_unlabeled"] = {"total": len(test_files)}
+    test_split_name, test_dir = _resolve_test_dir(ds_path)
+    test_files = _list_images_in_dir(test_dir, recursive=True)
+    splits_info[test_split_name] = {
+        "folder_name": test_split_name,
+        "total": len(test_files),
+    }
 
     # Sample image dimensions and channel modes
     all_train_files = (
-        sorted(list((ds_path / "train" / "NORMAL").glob("*.jp*g")))[: sample_limit // 2]
-        + sorted(list((ds_path / "train" / "PNEUMONIA").glob("*.jp*g")))[: sample_limit // 2]
+        _list_images_in_dir(ds_path / "train" / "NORMAL")[: sample_limit // 2]
+        + _list_images_in_dir(ds_path / "train" / "PNEUMONIA")[: sample_limit // 2]
     )
     widths, heights, modes = [], [], set()
     for p in all_train_files:
@@ -104,11 +146,12 @@ def audit_dataset_directory(dataset_dir: str | Path, sample_limit: int = 300) ->
     return {
         "exists": True,
         "dataset_dir": str(ds_path),
+        "test_folder_name": test_split_name,
         "splits": splits_info,
         "total_images": (
             splits_info["train"]["total"]
             + splits_info["val"]["total"]
-            + splits_info["test_unlabeled"]["total"]
+            + splits_info[test_split_name]["total"]
         ),
         "resolution_sample_stats": {
             "sampled_images": len(widths),
@@ -133,9 +176,9 @@ class ChestXRayDataset(Dataset):
 
     Supports:
     - `split="train"` or `"val"`: labeled images from `NORMAL/` (0) and `PNEUMONIA/` (1).
-    - `split="test_unlabeled"`: unlabeled test images (`img_XXXX.jpeg`), returning `label=-1`
-      and `image_id=img_path.name`.
-    - `split="all_unsupervised"`: combines `train/` + (`val/` or `test_unlabeled/` if requested)
+    - `split="test"` or `"test_unlabeled"`: unlabeled test images from `DATASET/test/`,
+      returning `label=-1` and `image_id=img_path.name`.
+    - `split="all_unsupervised"`: combines `train/` + (`test/` if `include_unlabeled_in_ae=True`)
       for Stage 1 unsupervised Autoencoder training.
     - Configurable preprocessing (`raw`, `fixed_clahe` with `alpha`, `multiview_3ch`) and
       paired `(raw_tensor, enhanced_tensor)` output for Enhancement-Reconstruction AE training.
@@ -143,7 +186,7 @@ class ChestXRayDataset(Dataset):
 
     def __init__(
         self,
-        dataset_dir: str | Path,
+        dataset_dir: str | Path = "./DATASET",
         split: str = "train",
         image_size: int = 256,
         preprocess_mode: str = "raw",
@@ -154,7 +197,7 @@ class ChestXRayDataset(Dataset):
         include_unlabeled_in_ae: bool = False,
     ) -> None:
         super().__init__()
-        self.dataset_dir = Path(dataset_dir).expanduser().resolve()
+        self.dataset_dir = _resolve_existing_dataset_root(Path(dataset_dir).expanduser().resolve())
         self.split = split
         self.image_size = image_size
         self.preprocess_mode = preprocess_mode
@@ -167,25 +210,21 @@ class ChestXRayDataset(Dataset):
         if split in ("train", "val"):
             for cls_name, label in CLASS_TO_IDX.items():
                 cls_dir = self.dataset_dir / split / cls_name
-                if cls_dir.exists():
-                    for p in sorted(cls_dir.glob("*.jp*g")):
-                        self.samples.append((p, label))
-        elif split == "test_unlabeled":
-            test_dir = self.dataset_dir / "test_unlabeled"
-            if test_dir.exists():
-                for p in sorted(test_dir.glob("*.jp*g")):
-                    self.samples.append((p, -1))
+                for p in _list_images_in_dir(cls_dir):
+                    self.samples.append((p, label))
+        elif split in ("test", "test_unlabeled"):
+            _, test_dir = _resolve_test_dir(self.dataset_dir)
+            for p in _list_images_in_dir(test_dir, recursive=True):
+                self.samples.append((p, -1))
         elif split == "all_unsupervised":
             for cls_name, label in CLASS_TO_IDX.items():
                 cls_dir = self.dataset_dir / "train" / cls_name
-                if cls_dir.exists():
-                    for p in sorted(cls_dir.glob("*.jp*g")):
-                        self.samples.append((p, label))
+                for p in _list_images_in_dir(cls_dir):
+                    self.samples.append((p, label))
             if include_unlabeled_in_ae:
-                test_dir = self.dataset_dir / "test_unlabeled"
-                if test_dir.exists():
-                    for p in sorted(test_dir.glob("*.jp*g")):
-                        self.samples.append((p, -1))
+                _, test_dir = _resolve_test_dir(self.dataset_dir)
+                for p in _list_images_in_dir(test_dir, recursive=True):
+                    self.samples.append((p, -1))
         else:
             raise ValueError(f"Unknown split '{split}'.")
 

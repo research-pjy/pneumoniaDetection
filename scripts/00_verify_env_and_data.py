@@ -26,6 +26,7 @@ import torch
 import torch.nn as nn
 
 from pneuvision.data.dataset import (
+    _list_images_in_dir,
     audit_dataset_directory,
     ensure_dataset_extracted,
     generate_synthetic_chest_xray,
@@ -90,7 +91,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Stage 0: Verify L40S GPU environment, audit Chest X-Ray dataset, and preview enhancement."
     )
-    parser.add_argument("--dataset-dir", type=str, default="./dataset", help="Path to dataset/ directory")
+    parser.add_argument("--dataset-dir", type=str, default="./DATASET", help="Path to DATASET/ directory")
     parser.add_argument("--tar-path", type=str, default=None, help="Optional path to dataset.tar.gz to auto-extract")
     parser.add_argument("--output-dir", type=str, default="./outputs", help="Directory for JSON audit and figures")
     parser.add_argument("--seed", type=int, default=42, help="Deterministic random seed")
@@ -139,8 +140,8 @@ def main() -> None:
         print(f"  - Height(min/med/max): {res['height_min_median_max']} px")
 
         # Load one real NORMAL and one real PNEUMONIA radiograph for the preview panel
-        norm_p = sorted(list((ds_path / "train" / "NORMAL").glob("*.jp*g")))[0]
-        pneu_p = sorted(list((ds_path / "train" / "PNEUMONIA").glob("*.jp*g")))[0]
+        norm_p = _list_images_in_dir(ds_path / "train" / "NORMAL")[0]
+        pneu_p = _list_images_in_dir(ds_path / "train" / "PNEUMONIA")[0]
         with Image.open(norm_p) as im:
             norm_img = np.asarray(im.convert("L").resize((256, 256)), dtype=np.float32) / 255.0
         with Image.open(pneu_p) as im:

@@ -48,10 +48,10 @@ class HardwareConfig:
 @dataclass
 class DataConfig:
     """Dataset paths, image resolution, and split settings."""
-    dataset_dir: str = "./dataset"
+    dataset_dir: str = "./DATASET"
     image_size: int = 256
     in_channels: int = 1
-    include_unlabeled_in_ae: bool = False  # Transductive unsupervised AE pretraining on test_unlabeled/
+    include_unlabeled_in_ae: bool = False  # Transductive unsupervised AE pretraining on test/
 
 
 @dataclass
