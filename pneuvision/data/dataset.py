@@ -308,10 +308,13 @@ def load_split_into_ram(
     base_ds = ChestXRayDataset(dataset_dir=dataset_dir, split=split, image_size=image_size)
     samples = base_ds.samples
     if max_samples > 0 and len(samples) > max_samples:
-        # Balanced subsample for smoke test
+        # Balanced subsample for labeled splits; direct slice for unlabeled test split
         norm_s = [s for s in samples if s[1] == 0][: max_samples // 2]
         pneu_s = [s for s in samples if s[1] == 1][: max_samples - len(norm_s)]
-        samples = norm_s + pneu_s
+        if norm_s or pneu_s:
+            samples = norm_s + pneu_s
+        else:
+            samples = samples[:max_samples]
 
     def _decode_one(item: Tuple[Path, int]) -> Tuple[np.ndarray, int, str]:
         p, lbl = item
